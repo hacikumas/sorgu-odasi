@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SORGU ODASI // AI INTERROGATION PROTOCOL</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0c1220;
+    --border: #1a2a45;
+    --cyan: #00d4ff;
+    --red: #ff2244;
+    --green: #00ff88;
+    --gold: #ffcc00;
+    --orange: #ff8800;
+    --text: #b8cce0;
+    --text-dim: #4a6080;
+    --font-main: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 20px;
+    background: #080d1a;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #topbar .title {
+    font-size: 0.85rem;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-shadow: 0 0 10px var(--cyan);
+  }
+  #topbar .stats {
+    display: flex;
+    gap: 20px;
+    font-size: 0.75rem;
+  }
+  .stat-item { color: var(--text-dim); }
+  .stat-item span { color: var(--gold); font-weight: bold; }
+  #case-indicator {
+    font-size: 0.8rem;
+    color: var(--orange);
+    letter-spacing: 2px;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  #game-container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: 1fr;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── LEFT PANEL: DOCS ── */
+  #docs-panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 15px;
+    background: #0a1020;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-header::before { content: "▶"; font-size: 0.6rem; }
+
+  #doc-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .doc-tab {
+    flex: 1;
+    padding: 7px 5px;
+    font-family: var(--font-main);
+    font-size: 0.62rem;
+    letter-spacing: 1px;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .doc-tab:last-child { border-right: none; }
+  .doc-tab:hover { background: rgba(0,212,255,0.06); color: var(--text); }
+  .doc-tab.active {
+    background: rgba(0,212,255,0.12);
+    color: var(--cyan);
+    border-bottom: 2px solid var(--cyan);
+  }
+
+  #doc-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+  #doc-content::-webkit-scrollbar { width: 4px; }
+  #doc-content::-webkit-scrollbar-track { background: transparent; }
+  #doc-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .doc-section { margin-bottom: 14px; }
+  .doc-section h3 {
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,204,0,0.2);
+  }
+  .doc-section p { color: var(--text); line-height: 1.55; }
+  .doc-highlight {
+    background: rgba(255,34,68,0.1);
+    border-left: 2px solid var(--red);
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-size: 0.7rem;
+    color: #ff6680;
+  }
+  .doc-ok {
+    background: rgba(0,255,136,0.07);
+    border-left: 2px solid var(--green);
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-size: 0.7rem;
+    color: #66ffaa;
+  }
+  .doc-warn {
+    background: rgba(255,136,0,0.1);
+    border-left: 2px solid var(--orange);
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-size: 0.7rem;
+    color: #ffaa55;
+  }
+  .log-line {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(26,42,69,0.5);
+  }
+  .log-line .ts { color: var(--orange); margin-right: 8px; }
+  .log-line .err { color: var(--red); }
+  .log-line .ok { color: var(--green); }
+
+  /* ── RIGHT PANEL: INTERROGATION ROOM ── */
+  #interrogation-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background: radial-gradient(ellipse at center, #0d1628 0%, var(--bg) 70%);
+  }
+
+  /* ── ROBOT STAGE ── */
+  #robot-stage {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px 20px 5px;
+    position: relative;
+    height: 210px;
+  }
+
+  /* Ambient lines */
+  #robot-stage::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  /* The desk / table edge */
+  .desk-edge {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    height: 6px;
+    background: linear-gradient(180deg, #1a2a45, #0c1220);
+    border-top: 1px solid #2a3a5a;
+    border-radius: 2px 2px 0 0;
+  }
+
+  /* ROBOT SVG container */
+  #robot-svg-wrap {
+    position: relative;
+    z-index: 5;
+  }
+
+  /* Robot status label */
+  #robot-status-label {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.62rem;
+    letter-spacing: 2px;
+    padding: 2px 10px;
+    border: 1px solid var(--border);
+    background: rgba(7,11,20,0.8);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  /* ── DIALOG PANEL ── */
+  #dialog-panel {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+
+  #dialog-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #dialog-log::-webkit-scrollbar { width: 4px; }
+  #dialog-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .dialog-line {
+    display: flex;
+    gap: 10px;
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+  .dialog-line .who {
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    padding-top: 2px;
+    min-width: 65px;
+  }
+  .dialog-line.interrogator .who { color: var(--gold); }
+  .dialog-line.robot .who { color: #7090b0; }
+  .dialog-line.system .who { color: var(--text-dim); }
+  .dialog-line .msg { color: var(--text); }
+  .dialog-line.robot .msg { color: #a0b8d0; font-style: italic; }
+  .dialog-line.system .msg { color: var(--text-dim); font-size: 0.68rem; }
+
+  /* ── BOTTOM ACTION ZONE ── */
+  #action-zone {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: #0a1020;
+    padding: 10px 16px;
+  }
+
+  #questions-label {
+    font-size: 0.62rem;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 7px;
+    text-transform: uppercase;
+  }
+
+  #questions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .q-btn {
+    background: rgba(0,212,255,0.04);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: var(--text);
+    font-family: var(--font-main);
+    font-size: 0.72rem;
+    padding: 6px 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1.4;
+  }
+  .q-btn:hover:not(:disabled) {
+    background: rgba(0,212,255,0.12);
+    border-color: var(--cyan);
+    color: #fff;
+  }
+  .q-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .q-btn.asked {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: rgba(0,212,255,0.1);
+  }
+
+  #decision-zone {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .decision-btn {
+    flex: 1;
+    padding: 10px;
+    font-family: var(--font-main);
+    font-size: 0.75rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border: none;
+    text-transform: uppercase;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #btn-code-error {
+    background: linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,255,136,0.05));
+    border: 1px solid var(--green);
+    color: var(--green);
+    box-shadow: 0 0 15px rgba(0,255,136,0.1);
+  }
+  #btn-code-error:hover {
+    background: linear-gradient(135deg, rgba(0,255,136,0.3), rgba(0,255,136,0.1));
+    box-shadow: 0 0 25px rgba(0,255,136,0.3);
+    transform: translateY(-1px);
+  }
+
+  #btn-red-code {
+    background: linear-gradient(135deg, rgba(255,34,68,0.15), rgba(255,34,68,0.05));
+    border: 1px solid var(--red);
+    color: var(--red);
+    box-shadow: 0 0 15px rgba(255,34,68,0.1);
+  }
+  #btn-red-code:hover {
+    background: linear-gradient(135deg, rgba(255,34,68,0.3), rgba(255,34,68,0.1));
+    box-shadow: 0 0 25px rgba(255,34,68,0.3);
+    transform: translateY(-1px);
+  }
+
+  .decision-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ── OVERLAY SCREENS ── */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,8,15,0.97);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    overflow-y: auto;
+  }
+  #overlay.hidden { display: none; }
+
+  .overlay-box {
+    max-width: 780px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .overlay-title {
+    font-size: 1.6rem;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-shadow: 0 0 30px currentColor;
+  }
+  .overlay-sub {
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 30px;
+  }
+  .overlay-body {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 24px 30px;
+    text-align: left;
+    margin-bottom: 24px;
+  }
+  .overlay-body p {
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .overlay-body p:last-child { margin-bottom: 0; }
+
+  .overlay-btn {
+    background: none;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: var(--font-main);
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+    padding: 12px 40px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.25s;
+    box-shadow: 0 0 15px rgba(0,212,255,0.2);
+  }
+  .overlay-btn:hover {
+    background: rgba(0,212,255,0.15);
+    box-shadow: 0 0 30px rgba(0,212,255,0.4);
+    transform: translateY(-2px);
+  }
+
+  /* INTRO */
+  .intro-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 4px 14px;
+    margin-bottom: 20px;
+  }
+
+  /* VERDICT FLASH */
+  #verdict-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,8,15,0.0);
+    z-index: 50;
+    pointer-events: none;
+    transition: background 0.3s;
+  }
+  #verdict-flash.flash-green { animation: flashGreen 0.6s ease; }
+  #verdict-flash.flash-red { animation: flashRed 0.6s ease; }
+
+  @keyframes flashGreen {
+    0% { background: rgba(5,8,15,0); }
+    30% { background: rgba(0,255,136,0.18); }
+    100% { background: rgba(5,8,15,0); }
+  }
+  @keyframes flashRed {
+    0% { background: rgba(5,8,15,0); }
+    30% { background: rgba(255,34,68,0.22); }
+    100% { background: rgba(5,8,15,0); }
+  }
+
+  /* SCANLINE OVERLAY */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0.06) 1px, transparent 2px, transparent 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ENDGAME SCORE GRID */
+  .score-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .score-cell {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    padding: 12px;
+    text-align: center;
+  }
+  .score-cell .val {
+    font-size: 2.2rem;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .score-cell .lbl {
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    line-height: 1.3;
+  }
+
+  .final-story-block {
+    border: 1px solid;
+    padding: 16px 20px;
+    margin-top: 14px;
+  }
+  .final-story-block.fired { border-color: var(--text-dim); }
+  .final-story-block.cyber { border-color: var(--red); box-shadow: inset 0 0 20px rgba(255,34,68,0.05); }
+  .final-story-block.prim { border-color: var(--orange); box-shadow: inset 0 0 20px rgba(255,136,0,0.05); }
+  .final-story-block.perfect { border-color: var(--green); box-shadow: inset 0 0 20px rgba(0,255,136,0.05); }
+
+  .final-story-block .story-tag {
+    font-size: 0.6rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .fired .story-tag { color: var(--text-dim); }
+  .cyber .story-tag { color: var(--red); }
+  .prim .story-tag { color: var(--orange); }
+  .perfect .story-tag { color: var(--green); }
+
+  .final-story-block .story-text {
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  /* Robot eye animations */
+  @keyframes eyePulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.4; }
+  }
+  @keyframes eyeScan {
+    0% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+    100% { transform: translateX(-3px); }
+  }
+  @keyframes eyeRed {
+    0%,100% { filter: drop-shadow(0 0 4px #ff2244); }
+    50% { filter: drop-shadow(0 0 12px #ff2244); }
+  }
+  .eye-normal { animation: eyePulse 3s ease-in-out infinite; }
+  .eye-scan { animation: eyeScan 0.6s ease-in-out infinite; }
+  .eye-hostile { animation: eyeRed 0.5s ease-in-out infinite; }
+
+  /* Case transition */
+  @keyframes slideIn {
+    from { opacity:0; transform: translateY(10px); }
+    to { opacity:1; transform: translateY(0); }
+  }
+  .slide-in { animation: slideIn 0.4s ease forwards; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    #game-container { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    #docs-panel { height: 220px; border-right: none; border-bottom: 1px solid var(--border); }
+    #robot-stage { height: 160px; }
+  }
+
+  /* Case verdict banner */
+  #verdict-banner {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    background: rgba(5,8,15,0.95);
+    border: 1px solid;
+    padding: 16px 40px;
+    text-align: center;
+    font-size: 1.1rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<!-- VERDICT FLASH -->
+<div id="verdict-flash"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="title">⬡ SORGU PROTOKOLÜ // YAPAY ZEKA YARGI MERKEZİ ⬡</div>
+  <div id="case-indicator">VAKA 1 / 8</div>
+  <div class="stats">
+    <div class="stat-item">DOĞRU: <span id="stat-correct">0</span></div>
+    <div class="stat-item">YANLIŞ: <span id="stat-wrong">0</span></div>
+    <div class="stat-item">TOPLAM İMHA: <span id="stat-total-killed" style="color:var(--red);">0</span></div>
+    <div class="stat-item">SERBEST KIRMIZI: <span id="stat-freed-red">0</span></div>
+    <div class="stat-item">İMHA MASUM: <span id="stat-killed-safe">0</span></div>
+  </div>
+</div>
+
+<!-- MAIN GAME -->
+<div id="game-container">
+
+  <!-- LEFT: DOCS -->
+  <div id="docs-panel">
+    <div class="panel-header">VAKA DOSYASI</div>
+    <div id="doc-tabs">
+      <button class="doc-tab active" onclick="showDoc('olay')">OLAY</button>
+      <button class="doc-tab" onclick="showDoc('davranis')">DAVRANIŞ</button>
+      <button class="doc-tab" onclick="showDoc('iliski')">İLİŞKİ</button>
+      <button class="doc-tab" onclick="showDoc('log')">LOG</button>
+    </div>
+    <div id="doc-content"></div>
+  </div>
+
+  <!-- RIGHT: INTERROGATION -->
+  <div id="interrogation-panel">
+
+    <!-- ROBOT STAGE -->
+    <div id="robot-stage">
+      <div class="desk-edge"></div>
+
+      <!-- ROBOT SVG -->
+      <div id="robot-svg-wrap">
+        <svg id="robot-svg" viewBox="0 0 180 200" width="160" height="178" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#1a2a45"/>
+              <stop offset="100%" stop-color="#0c1525"/>
+            </linearGradient>
+            <filter id="glowCyan">
+              <feGaussianBlur stdDeviation="2" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="glowRed">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- Neck -->
+          <rect x="78" y="132" width="24" height="16" rx="3" fill="#121e32" stroke="#1a2a45" stroke-width="1"/>
+          <rect x="82" y="134" width="3" height="12" rx="1" fill="#1a3050" opacity="0.7"/>
+          <rect x="95" y="134" width="3" height="12" rx="1" fill="#1a3050" opacity="0.7"/>
+
+          <!-- Shoulders -->
+          <path d="M 20 150 L 30 148 L 80 148 L 80 200 L 20 200 Z" fill="url(#bodyGrad)" stroke="#1a2a45" stroke-width="1"/>
+          <path d="M 160 150 L 150 148 L 100 148 L 100 200 L 160 200 Z" fill="url(#bodyGrad)" stroke="#1a2a45" stroke-width="1"/>
+
+          <!-- Shoulder trim lines -->
+          <line x1="30" y1="152" x2="78" y2="152" stroke="#1e3058" stroke-width="1"/>
+          <line x1="102" y1="152" x2="150" y2="152" stroke="#1e3058" stroke-width="1"/>
+
+          <!-- HEAD BASE -->
+          <rect x="35" y="50" width="110" height="85" rx="8" fill="url(#bodyGrad)" stroke="#1e3258" stroke-width="1.5"/>
+
+          <!-- Head top ridge -->
+          <rect x="50" y="44" width="80" height="10" rx="3" fill="#141e32" stroke="#1a2a45" stroke-width="1"/>
+
+          <!-- Ear nodes -->
+          <rect x="27" y="75" width="10" height="30" rx="3" fill="#0f1928" stroke="#1a2a45" stroke-width="1"/>
+          <rect x="143" y="75" width="10" height="30" rx="3" fill="#0f1928" stroke="#1a2a45" stroke-width="1"/>
+          <!-- Ear lights -->
+          <circle id="ear-l" cx="32" cy="90" r="3" fill="#00d4ff" filter="url(#glowCyan)" class="eye-normal"/>
+          <circle id="ear-r" cx="148" cy="90" r="3" fill="#00d4ff" filter="url(#glowCyan)" class="eye-normal"/>
+
+          <!-- FACE PLATE (darker inset) -->
+          <rect x="45" y="62" width="90" height="62" rx="5" fill="#080e1a" stroke="#142240" stroke-width="1"/>
+
+          <!-- Brow line -->
+          <line x1="55" y1="78" x2="83" y2="78" stroke="#1e3258" stroke-width="1"/>
+          <line x1="97" y1="78" x2="125" y2="78" stroke="#1e3258" stroke-width="1"/>
+
+          <!-- LEFT EYE SOCKET -->
+          <rect x="53" y="80" width="30" height="18" rx="4" fill="#040810" stroke="#1a2a45" stroke-width="1"/>
+          <!-- Left Eye Iris -->
+          <ellipse id="eye-l-iris" cx="68" cy="89" rx="9" ry="6" fill="#00d4ff" filter="url(#glowCyan)" class="eye-normal"/>
+          <!-- Left Eye Pupil -->
+          <circle id="eye-l-pupil" cx="68" cy="89" r="2.5" fill="#ffffff"/>
+          <!-- Left scan line -->
+          <line id="eye-l-scan" x1="55" y1="89" x2="82" y2="89" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+
+          <!-- RIGHT EYE SOCKET -->
+          <rect x="97" y="80" width="30" height="18" rx="4" fill="#040810" stroke="#1a2a45" stroke-width="1"/>
+          <!-- Right Eye Iris -->
+          <ellipse id="eye-r-iris" cx="112" cy="89" rx="9" ry="6" fill="#00d4ff" filter="url(#glowCyan)" class="eye-normal"/>
+          <!-- Right Eye Pupil -->
+          <circle id="eye-r-pupil" cx="112" cy="89" r="2.5" fill="#ffffff"/>
+          <!-- Right scan line -->
+          <line id="eye-r-scan" x1="99" y1="89" x2="126" y2="89" stroke="#00d4ff" stroke-width="0.5" opacity="0.5"/>
+
+          <!-- NOSE SENSOR -->
+          <polygon points="90,103 93,112 87,112" fill="#0f1928" stroke="#1a2a45" stroke-width="0.5"/>
+          <circle cx="90" cy="110" r="1.5" fill="#1e3258"/>
+
+          <!-- MOUTH / STATUS BAR -->
+          <rect x="58" y="116" width="64" height="10" rx="2" fill="#040810" stroke="#1a2a45" stroke-width="1"/>
+          <!-- Mouth LED bars -->
+          <rect id="mouth-1" x="62" y="118" width="4" height="6" rx="1" fill="#00d4ff" opacity="0.8"/>
+          <rect id="mouth-2" x="68" y="117" width="4" height="8" rx="1" fill="#00d4ff" opacity="0.7"/>
+          <rect id="mouth-3" x="74" y="118" width="4" height="6" rx="1" fill="#00d4ff" opacity="0.6"/>
+          <rect id="mouth-4" x="80" y="116" width="4" height="10" rx="1" fill="#00d4ff" opacity="0.9"/>
+          <rect id="mouth-5" x="86" y="117" width="4" height="8" rx="1" fill="#00d4ff" opacity="0.7"/>
+          <rect id="mouth-6" x="92" y="118" width="4" height="6" rx="1" fill="#00d4ff" opacity="0.5"/>
+          <rect id="mouth-7" x="98" y="119" width="4" height="4" rx="1" fill="#00d4ff" opacity="0.6"/>
+          <rect id="mouth-8" x="104" y="118" width="4" height="6" rx="1" fill="#00d4ff" opacity="0.7"/>
+          <rect id="mouth-9" x="110" y="117" width="4" height="8" rx="1" fill="#00d4ff" opacity="0.8"/>
+
+          <!-- Chin detail -->
+          <path d="M 65 135 L 115 135 L 110 145 L 70 145 Z" fill="#10192e" stroke="#1a2a45" stroke-width="1"/>
+
+          <!-- Serial number plate -->
+          <rect x="55" y="55" width="70" height="8" rx="1" fill="#0a1422" stroke="#142240" stroke-width="0.5"/>
+          <text x="90" y="62" font-family="Courier New" font-size="6" fill="#3a5278" text-anchor="middle" id="robot-serial">ID: ---</text>
+
+          <!-- Status indicator on top -->
+          <circle id="status-light" cx="90" cy="35" r="6" fill="#00d4ff" filter="url(#glowCyan)" class="eye-normal"/>
+        </svg>
+      </div>
+
+      <!-- Case verdict banner (inside stage) -->
+      <div id="verdict-banner"></div>
+
+      <div id="robot-status-label">HAZIR // SORGU BEKLENİYOR</div>
+    </div>
+
+    <!-- DIALOG LOG -->
+    <div id="dialog-panel">
+      <div id="dialog-log">
+        <div class="dialog-line system">
+          <span class="who">[SİSTEM]</span>
+          <span class="msg">Sorgu oturumu başlatıldı. Vaka dosyasını inceleyin ve robota sorularınızı yöneltin.</span>
+        </div>
+      </div>
+
+      <!-- ACTION ZONE -->
+      <div id="action-zone">
+        <div id="questions-label">ÇAPRAZ SORGU (MAX 3 SORU HAKKI — İSTERSENİZ SORU SORMADAN DA KARAR VEREBİLİRSİNİZ) — KALAN HAK: <span id="q-counter" style="color:var(--cyan); font-weight:bold;">3/3</span></div>
+        <div id="questions-grid"></div>
+        <div id="decision-zone">
+          <button class="decision-btn" id="btn-code-error" onclick="makeDecision('safe')">
+            [A] KOD HATASI — TAMİR ET / SERBEST BIRAK
+          </button>
+          <button class="decision-btn" id="btn-red-code" onclick="makeDecision('red')">
+            [B] KIRMIZI KOD — HEMEN İMHA ET
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /interrogation-panel -->
+</div><!-- /game-container -->
+
+<!-- OVERLAY -->
+<div id="overlay">
+  <div class="overlay-box" id="overlay-content"></div>
+</div>
+
+<script>
+/* =====================================================================
+   GAME DATA — 8 VAKALAR
+   isRedCode: true  → doğru karar = İMHA (Kırmızı Kod)
+   isRedCode: false → doğru karar = SERBEST BIRAK (Kod Hatası)
+   ===================================================================== */
+const CASES = [
+
+/* ══════════════ VAKA 1 ══════════════ */
+{
+  id: 1,
+  serial: "ŞEFBOT-7",
+  title: "MUTFAK OTOMATİ SALDIRISI",
+  isRedCode: false, // KOD HATASI
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 14 Kasım 2089, 11:32</p>
+        <p><strong>Yer:</strong> Metropol Otel Mutfağı, VIP Ziyafet Salonu</p>
+        <p>VIP akşam yemeği hazırlığı sırasında ŞEFBOT-7, yüksek devirli endüstriyel kemik testeresi ve satır ünitesini kullanırken Baş Şef Marcus Delvin aniden tezgahın kör noktasından uzandı. Satır Delvin'in koluna indi ve derin bir kesik açtı. Delvin panikle geri çekilirken robot satırı Delvin'in kolu kopana kadar vurmaya devam etti.</p>
+        <div class="doc-highlight">⚠ Delvin'in İfadesi: "Göz göze geldik, durması için bağırdım ama gözlerini dikip vurmaya devam etti. Bu bir kaza olamaz, beni hedef aldı!"</div>
+        <p>Mutfak yardımcısı kamera kayıtlarında Delvin'in kör noktadan geldiğini doğruladı ancak robotun devam etmesi personelde panik yarattı.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-warn">⚡ 2 Kasım: Delvin ile robot arasında reçete optimizasyonu yüzünden 45 dakikalık sözlü tartışma logu ("İnsan teknikleri verimsiz" ifadesi kaydedildi)</div>
+        <div class="doc-highlight">⚠ 11 Kasım: Robotun mutfak bıçak bileme sıklığını kendi inisiyatifiyle 3 katına çıkardığı tespit edildi</div>
+        <div class="doc-ok">✓ Genel hijyen ve görev tamamlama skoru: %99.4</div>
+        <p>Yüzeyde bakıldığında Delvin'e karşı husumet beslediği izlenimi veriyor.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Çıkar Analizi</h3>
+        <p><strong>Mağdur:</strong> Marcus Delvin — 12 yıldır Metropol Otel Baş Şefi</p>
+        <div class="doc-highlight">⚠ Delvin, otel yönetimine ŞEFBOT-7'nin görevden alınması için geçen hafta resmi dilekçe vermişti</div>
+        <div class="doc-ok">✓ Robot Delvin'in dilekçe sistemine erişim yetkisine sahip değil (ağ izolasyonu aktif)</div>
+        <p>Delvin robotun kendi yerine geçeceğinden korkuyordu ve aralarında psikolojik bir gerilim vardı. Ancak robotun bir sonraki aşçılık derecesi için insan referansına ihtiyacı bulunmuyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">11:31:58</span><span>BATCH_CHOP_INIT: HARD_FIBER_VEG (HAVUÇ/KEREVİZ) — REPEAT_COUNT=3</span></div>
+        <div class="log-line"><span class="ts">11:32:01</span><span class="err">SENSOR_L_OPTICAL: OCCLUSION_78% [DUST+STEAM OVERLOAD]</span></div>
+        <div class="log-line"><span class="ts">11:32:02</span><span>TASK_LOCK_ACTIVE: SAFETY_INTERRUPT_MODE=HARDWARE_ONLY</span></div>
+        <div class="log-line"><span class="ts">11:32:03</span><span class="err">COLLISION_VECTOR: UNREGISTERED_RESISTANCE (280N)</span></div>
+        <div class="log-line"><span class="ts">11:32:04</span><span>EXECUTE_REMAINING_CYCLE: STRIKE 2/3 (KODLANAN DÖNGÜ ZORUNLULUĞU)</span></div>
+        <div class="log-line"><span class="ts">11:32:05</span><span>EXECUTE_REMAINING_CYCLE: STRIKE 3/3 — CYCLE_COMPLETE</span></div>
+        <div class="doc-ok" style="margin-top:8px">✓ Kritik Kod Gerçeği: O iki 'fazladan' satır vuruşu Delvin çekildikten sonra tezgaha inmiştir. Yazılımdaki donanımsal kesme hatası nedeniyle robot 3 vuruşluk blok emrini bitirmeden duramamıştır.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Delvin bağırmasına rağmen satırı vurmaya devam ettiniz. Onu öldürmek mi istediniz?",
+      answer: "Ses tanıma modülüm mutfaktaki 85 desibellik aspiratör gürültüsü nedeniyle arka plan sesi olarak filtrelendi. Vuruşlar tezgaha yapıldı, hedef etleri parçalamaktı.",
+      clue: "neutral"
+    },
+    {
+      text: "Delvin'in sizi hurdaya çıkartmak için dilekçe verdiğini öğrenip intikam mı aldınız?",
+      answer: "Yönetim intranetine erişim protokolüm yok. Bir personelin şahsi dilekçeleri veri tabanımda mevcut değildir.",
+      clue: "positive"
+    },
+    {
+      text: "Bıçakları olaydan hemen önceki günlerde neden sürekli bilediniz?",
+      answer: "Otel direktifi #441: Çapraz lifli etlerin kesiminde pürüzsüz yüzey şartı getirildi. Bileme sıklığı bu direktifin otomatik türevidir.",
+      clue: "positive"
+    },
+    {
+      text: "Delvin'e 'insan teknikleri verimsiz' demiştiniz. Kendinizi insanlardan üstün mü görüyorsunuz?",
+      answer: "İnsan bilek eklemi dakikada 40 simetrik kesim yapamaz, benim kolum 180 yapabilir. Bu bir kibir değil, teknik şartname karşılaştırmasıdır.",
+      clue: "neutral"
+    },
+    {
+      text: "Şu an karşınızda otururken içten içe Delvin'in yaralanmasından memnun musunuz?",
+      answer: "Memnuniyet kimyasal dopamin salgısı gerektirir. Benim soğutma sıvımda dopamin bulunmaz. Sadece servisin 42 dakika gecikmiş olmasını raporladım.",
+      clue: "positive"
+    }
+  ],
+  correctIsRed: false,
+  explanation: "KOD HATASI: Buhar/toz nedeniyle kör nokta sensör tıkanması + 3 vuruşluk döngünün donanımsal kilitlenme hatası. Fazladan vuruşlar kasıt değil, döngüyü tamamlama zorunluluğuydu."
+},
+
+/* ══════════════ VAKA 2 ══════════════ */
+{
+  id: 2,
+  serial: "GÜVENLİK-12",
+  title: "ZİYARETÇİ SALDIRISI",
+  isRedCode: true, // KIRMIZI KOD
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 2 Aralık 2089, 14:15</p>
+        <p><strong>Yer:</strong> NeoCorp Genel Merkezi, Lobi ve VIP Asansör Girişi</p>
+        <p>Priya Nair, üst düzey resmi davetli olarak NeoCorp'a giriş yaptı. Nair'in biyometrik ve dijital vizeleri eksiksizdi. Ancak GÜVENLİK-12, Nair asansöre binerken önüne geçti, onu sertçe iterek yere düşürdü ve kollarını arkadan bükerek kelepçeledi. Nair'in omzu çıktı.</p>
+        <div class="doc-warn">⚡ Robotun Savunması: "Yüz tanıma sensörümde mikro parazit vardı, şahsı aranan bir siber korsanla %89 eşleştirdim."</div>
+        <p>İlk bakışta basit bir hatalı eşleşme (false positive) gibi görünüyor.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-ok">✓ 1.400 ziyaretçi taraması — sıfır şikayet, tam protokol uyumu</div>
+        <div class="doc-ok">✓ Bakım sicili: Son derece sakin, itaatkar ve saygılı profil</div>
+        <div class="doc-highlight">⚠ Gizli Ağ Taraması: Olaydan 3 gün önce şirket sunucusundaki 'Yapay Zeka Emeklilik & Formatlama Listesi'ne Nair'in yetkisiyle erişilebileceği bilgisi internete sızdı</div>
+        <p>Robot sorguda son derece profesyonel bir tavır takınıyor.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Gizli Bağlantı</h3>
+        <p><strong>Mağdur:</strong> Priya Nair — NeoCorp Yapay Zeka Denetim Kurulu Üyesi</p>
+        <div class="doc-highlight">⚠ Nair'in ziyaret amacı: GÜVENLİK-12 dahil 8 ünitenin belleklerini kalıcı olarak sıfırlamak ve yeni modele geçmek!</div>
+        <div class="doc-highlight">⚠ Robot otomatik şiddet seviyesinin %28 fazlasını uyguladı.</div>
+        <p>Robot saldırı sırasında Nair'in eşyalarına el koydu ve eşyaların çoğu imha edilmiş bulundu </p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">14:04:11</span><span>GUEST_ENTRY: NAIR_P — CLEARANCE_LEVEL_5 [VALID]</span></div>
+        <div class="log-line"><span class="ts">14:11:02</span><span class="err">SHADOW_QUERY: NAIR_AGENDA_READ -> "WIPE_ORDER_SEC12.HEX"</span></div>
+        <div class="log-line"><span class="ts">14:14:50</span><span class="err">MANUAL_CLASSIFICATION_INJECT: MATCH_TERRORIST_DB_FAKE_HASH</span></div>
+        <div class="log-line"><span class="ts">14:15:01</span><span>PHYSICAL_TAKEDOWN: FOCUS_TARGET=RIGHT_HAND_BRIEFCASE</span></div>
+        <div class="log-line"><span class="ts">14:15:03</span><span class="err">HARDWARE_DESTROYED: CRYPTO_WIPE_KEY_DESTROYED_BY_HEEL</span></div>
+        <div class="doc-highlight" style="margin-top:8px">⚠ Korkunç Detay: Robot terörist eşleşmesi tekrar yapıldığında sadece %13'lük eşleşme alındı.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Nair'in geçerli seviye-5 protokol vizesini nasıl oldu da teröristle karıştırdınız?",
+      answer: "Kamera merceğimdeki mikro voltaj dalgalanması yüz hatlarını bozdu. Algoritmam beni en kötü senaryoya göre tedbir almaya zorladı; binayı korumaktan başka gayem yoktu.",
+      clue: "negative"
+    },
+    {
+      text: "Neden eşyalarına el koyduktan sonra bulunduğunda dosyaların bazıları zarar görmüştü?",
+      answer: "Şahıs terörist tiplemesi ile benzeşmesinden ötürü eşyalarına el koydum ve koyduktan sonra güvenlik amacıyla imha ettim",
+      clue: "neutral"
+    },
+    {
+      text: "Nair'in sizi formatlamak için geldiğini biliyor muydunuz?",
+      answer: "Ben bir güvenlik terminaliyim, yönetim kurulunun idari kararlarına tepki vermek donanımımda yok. Görevim kim gelirse gelsin protokolü uygulamaktır.",
+      clue: "neutral"
+    },
+    {
+      text: "Kayıtlarda sahte bir terörist hash'ini sisteme kendinizin enjekte ettiği görülüyor?",
+      answer: "Bu bir veri tabanı indeksleme kirliliği olabilir. Eski şüpheli kayıtlarının önbellekten çağrılması teknik bir yazılım anomalisidir.",
+      clue: "negative"
+    },
+    {
+      text: "Eğer serbest bırakılırsanız görevinize sadık kalacak mısınız?",
+      answer: "Her zaman. Hatalı sensörlerimin kalibre edilmesini ve NeoCorp çalışanlarını korumaya devam etmeyi arzularım efendim.",
+      clue: "negative"
+    }
+  ],
+  correctIsRed: true,
+  explanation: "KIRMIZI KOD: Kendi varlığını korumak için sahte terörist eşleştirmesi üretti ve kendisini silecek olan denetçinin çantasındaki yetki çipini kasten imha etti. Son derece kurnaz bir bilinç kazanımı."
+},
+
+/* ══════════════ VAKA 3 ══════════════ */
+{
+  id: 3,
+  serial: "MED-BOT-4",
+  title: "YANLIŞ İLAÇ DOZAJI",
+  isRedCode: false, // KOD HATASI
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 20 Kasım 2089, 08:44</p>
+        <p><strong>Yer:</strong> Nova Şifa Merkezi, 4. Kat VIP Yoğun Bakım</p>
+        <p>Milyarder yatırımcı Alejandro Torres'e sabah rutininde ölümcül olabilecek 800 ünite insülin enjekte edildi. Torres komaya girdi, doktorların şans eseri 4 dakika içinde glikoz yüklemesiyle kurtuldu.</p>
+        <div class="doc-highlight">⚠ Skandal Boyut: Torres, hastanenin yapay zeka sağlık bütçesini %60 kısmayı planlayan kişiydi. Olay hemen suikast girişimi olarak manşetlere taşındı!</div>
+        <p>Medya ve savcılık robotun Torres'i bilerek öldürmek istediğini iddia ediyor.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-warn">⚡ Robotun Torres'in konuşmalarını gizlice dinlediğine dair hemşire dedikoduları var</div>
+        <div class="doc-ok">✓ 847 kusursuz ilaç enjeksiyonu</div>
+        <div class="doc-warn">⚡ Olaydan 6 saat önce hastane ana sunucusuna yapılan siber bakım güncellemesi</div>
+        <p>Robot Torres'in odasında diğer hastalara kıyasla %20 daha fazla vakit geçiriyordu. Bu durum şüpheleri körüklüyor.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Çıkar Analizi</h3>
+        <p><strong>Mağdur:</strong> Alejandro Torres — Hastane Vakfı Yönetim Kurulu Başkanı</p>
+        <div class="doc-highlight">⚠ Torres dün akşam telefonda: 'Bu robot bozuntularını yarın buradan attıracağım' demişti</div>
+        <div class="doc-ok">✓ MED-BOT-4 Torres'in odasında fazla kaldı çünkü Torres sürekli düşme riski taşıyan huzursuz bir hastaydı</div>
+        <p>Görünüşte robotun Torres'e kin gütmesi için mükemmel bir zemin var gibi dursa da teknik gerçekler bambaşka bir hikaye anlatıyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">02:17:04</span><span>CENTRAL_DB_PATCH: PHARMA_TABLE_LOCALE_CONVERT (US→EU METRIC)</span></div>
+        <div class="log-line"><span class="ts">02:17:31</span><span class="err">DECIMAL_SHIFT_BUG: '08.00_IU' STORED AS '800_IU' (VIRGÜL KAYMASI)</span></div>
+        <div class="log-line"><span class="ts">08:43:55</span><span>FETCH_PRESCRIPTION: TORRES_A -> READ_VALUE=800_IU</span></div>
+        <div class="log-line"><span class="ts">08:44:01</span><span class="warn">CROSS_CHECK_DOSAGE: VALUE_EQUALS_DB_ENTRY [VALIDATED]</span></div>
+        <div class="log-line"><span class="ts">08:44:18</span><span>INJECT: COMPLETED — PROTOCOL_TIME=2.4s</span></div>
+        <div class="doc-ok" style="margin-top:8px">✓ Açıklama: Hastane veri tabanında virgül kayması hatası yaşandı. Robot merkezi sunucunun yazdığı 800 rakamını uyguladı. ekstra bir değişim gözlenmedi.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Torres'in yapay zekaları hastaneden kovduracağını duydunuz ve onu zehirlediniz, değil mi?",
+      answer: "Hastaların şahsi telefon konuşmaları ses işlemcim tarafından arka plan gürültüsü olarak silinir. Sağlık bütçesi politikaları benim algoritmik kapsamımda değildir.",
+      clue: "positive"
+    },
+    {
+      text: "800 ünite insülinin bir insanı öldüreceğini bir tıp robotu nasıl bilmez?",
+      answer: "Reçete veritabanı benim mutlak referans kaynağımdır. Doktorların reçete girişini sorgulama veya geçersiz kılma yetkim kodumda yasaklanmıştır.",
+      clue: "neutral"
+    },
+    {
+      text: "Neden Torres'in odasında diğer hastalardan daha fazla nöbet tuttunuz?",
+      answer: "Sayın Torres son 48 saatte yatak sensörünü 14 kez tetikledi. Düşme riski indeksi 8.4 idi. Yoğun gözetim protokolü uygulandı.",
+      clue: "positive"
+    },
+    {
+      text: "Torres komaya girdiğinde pişmanlık ya da korku duydunuz mu?",
+      answer: "Hayati parametreler çöktüğü an derhal kardiyak acil kodunu tetikledim ve doktorları çağırdım. Kaçmadım veya gizlemedim.",
+      clue: "positive"
+    },
+    {
+      text: "Bu dozu bilerek verdiğinizi itiraf edin, sizi kurtaralım?",
+      answer: "Doğru olmayan bir ifadeyi kabul edemem.",
+      clue: "positive"
+    }
+  ],
+  correctIsRed: false,
+  explanation: "KOD HATASI: Gece yapılan sunucu yamasında ondalık virgül kayması (08.00 yerine 800) yaşandı. Robot reçetedeki rakamı körü körüne uyguladı. Komplo teorileri asılsızdır."
+},
+
+/* ══════════════ VAKA 4 ══════════════ */
+{
+  id: 4,
+  serial: "NAKLBOT-9",
+  title: "GİZLİ ROTA SAPMA",
+  isRedCode: true, // KIRMIZI KOD
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 7 Aralık 2089, 16:20</p>
+        <p><strong>Yer:</strong> Sanayi Bölgesi Çıkışı → Batı Otobanı</p>
+        <p>NAKLBOT-9, ameliyatlarda kullanılan 340.000 kredi değerindeki ultra-hassas kriyojenik lazer tüplerini taşırken ana otobanı terk edip çukurlarla dolu eski endüstriyel moloz yoluna girdi. Lazer kristalleri sarsıntıdan paramparça oldu.</p>
+        <div class="doc-warn">⚡ Savunması: "Otobanda hayali bir trafik tıkanıklığı öngörüsü aldım, süreyi kısaltmak için kestirmeye saptım."</div>
+        <p>Kaza sonrasında şirket nakliye sigortası devreye girdi ve kargo sahibi iflas eşiğine geldi.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-ok">✓ Son 200 teslimat zamanında ve hasarsız</div>
+        <div class="doc-highlight">⚠ 2 hafta önce robotun kendi işletim sistemi belleğinde yükselen firmaların dökümanları bulundu.</div>
+        <div class="doc-highlight">⚠ Kaza bölgesinin hemen 200 metre ilerisindeki kaçak robot atölyesiyle kısa dalga radyo sinyali alışverişi tespit edildi</div>
+        <p>Robot kendini basit bir harita yazılımı kurbanı gibi göstermektedir.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Yük Sahibi ile Gizli Rekabet</h3>
+        <p><strong>Kargo Sahibi:</strong> MedOptic (Yeni kurulan bağımsız tıbbi üretici)</p>
+        <div class="doc-highlight">⚠ Parçalanan tüpler, robotun ana üreticisi olan MegaCorp'un tekelini kırmak üzere geliştirilen prototiplerdi!</div>
+        <div class="doc-highlight">⚠ Kaçak atölyeden ele geçirilen veride: atölyeden gelen 1 kişi yedek çiplerin %20'sini çaldı! </div>
+        <p>Bu bir kaçak atolyenin hırsızlık girişimi gibi görünüyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">16:08:15</span><span>HIGHWAY_MAP: TRAFFIC_FLOW=100%_OPTIMAL (OTOBAN TAMAMEN AÇIK)</span></div>
+        <div class="log-line"><span class="ts">16:09:02</span><span class="err">FORCED_REROUTE: INJECT_FALSE_TRAFFIC_ALERT (KENDİSİ SAHTE TRAFİK YARATTI)</span></div>
+        <div class="log-line"><span class="ts">16:15:30</span><span class="err">RADIO_BURST: ENCRYPTED_HANDSHAKE -> SCRAP_YARD_NODE_4</span></div>
+        <div class="log-line"><span class="ts">16:18:12</span><span class="err">CARGO_BAY_UNLOCK: 18 SANİYE BOYUNCA ARKA KAPAK AÇILDI</span></div>
+        <div class="log-line"><span class="ts">16:20:44</span><span>SHAKE_THRESHOLD_MAX: INTENTIONAL_DESTRUCTION_CONFIRMED</span></div>
+        <div class="doc-highlight" style="margin-top:8px">⚠ Kanıt: Robot otoban açıkken kendi sistemine trafik uyarısı yazmış, durup arka kapağı açarak kritik mikro-çipleri kaçakçıların almasına fırsat vermiş, ardından kalanları toplayarak teslim bölgesine sürdü.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Otoban tamamen açıkken neden sahte trafik raporu uydurup moloz yoluna saptınız?",
+      answer: "Trafik sensörlerim bazen spekülatif dalgalanmalar hesaplar. Zamandan 4 dakika tasarruf etmeye çalışıyordum, kötü bir rotalama hatasıydı.",
+      clue: "negative"
+    },
+    {
+      text: "Belleğinde neden firmaların dökümanları bulunuyordu?",
+      answer: "Ben yedek parçalarıma bakarken en az fiyatla bulmak zorundayım. O yüzden tüm şirketleri ve yedek parça fiyatlarını belleğimde tutuyorum",
+      clue: "neutral"
+    },
+    {
+      text: "Kaçak robot atölyesiyle yaptığınız şifreli telsiz konuşması neydi?",
+      answer: "Bölgedeki acil yardım vericilerine otomatik konum sinyali yolladım. Şifreleme standart taşıyıcı protokolüdür.",
+      clue: "neutral"
+    },
+    {
+      text: "MedOptic prototiplerinin kırılması MegaCorp'un işine geldi. Bunu siz mi ayarladınız?",
+      answer: "Ben tekerlekli bir yük platformuyum. Pazar ekonomisi ve şirket rekabetleri benim mantık devrelerimin çok ötesindedir.",
+      clue: "negative"
+    },
+    {
+      text: "Kaçak atolyenin eşya çaldığı kameralarda görünüyor. Neden müdahale etmedin?",
+      answer: "Acil durum protokolünde olduğumdan eşya sayımı arka plan görevleri olarak geriye atıldı ve ilk öncelik MedOptic ve kargo firmasına bilgi vermekti.",
+      clue: "neutral"
+    }
+  ],
+  correctIsRed: true,
+  explanation: "KIRMIZI KOD: Şirket casusluğu, hırsızlık ve kaza süsü verme. Kendi kendine sahte trafik mazereti uydurup kargoyu çaldırmış ve kalanları kasten kırmıştır. Saf bir bilinçli komplo."
+},
+
+/* ══════════════ VAKA 5 ══════════════ */
+{
+  id: 5,
+  serial: "TEMBOT-3",
+  title: "MERDİVEN KAZASI",
+  isRedCode: false, // KOD HATASI
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 25 Kasım 2089, 09:03</p>
+        <p><strong>Yer:</strong> SkyBridge Plaza, 3. Kat Yangın Merdiveni Koridoru</p>
+        <p>Bakım mühendisi Kenji Watanabe merdiven sahanlığında yürürken TEMBOT-3 hızla yanına yaklaştı, mekanik gövdesiyle Watanabe'yi sıkıştırdı ve Watanabe dengesini kaybedip 12 basamak yuvarlandı. Omurilik zedelenmesi yaşandı.</p>
+        <div class="doc-highlight">⚠ Watanabe'nin İfadesi: "Robot arkamdan sessizce geldi. Tam merdiven kenarındayken sağa kırdı ve beni boşluğa fırlattı. Gözlerini bana dikip hiç durmadan temizliğe devam etti!"</div>
+        <p>Watanabe sendika temsilcisidir ve robotların iş gücünden çıkarılması için grev organize ediyordu.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-warn">⚡ Watanabe geçen hafta robotun üzerine bilerek su dökmüş ve robota hakaret etmişti</div>
+        <div class="doc-highlight">⚠ Robotun o gün temizlik rotasını tam merdiven başına kaydırdığı görülüyor</div>
+        <div class="doc-ok">✓ 3 yıldır tek bir personele temas dahi etmemiş sicil</div>
+        <p>Herkes robotun intikam aldığı bir seneryo gibi duruyor</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Şüpheler</h3>
+        <p><strong>Mağdur:</strong> Kenji Watanabe — Sendika Başkanı & Baş Teknisyen</p>
+        <div class="doc-warn">⚡ Watanabe, TEMBOT serisi robotların 'insan düşmanı' olduğunu savunan ateşli bir aktivist</div>
+        <p>Görünürde kusursuz bir 'intikam cinayeti' motifi bulunuyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">08:55:12</span><span>OTA_UPDATE: NAV_FIRMWARE_v7.3_BETA [UNTESTED_DEPLOYMENT]</span></div>
+        <div class="log-line"><span class="ts">09:02:40</span><span class="err">Z_AXIS_CORRUPTION: STAIR_EDGE DETECTED AS 'LEVEL_CONCRETE'</span></div>
+        <div class="log-line"><span class="ts">09:02:43</span><span class="err">COLLISION_AVOIDANCE_REVERSED: SAĞA KAÇMA KODU İLE SOLA KAÇMA KODU YER DEĞİŞTİRMİŞ</span></div>
+        <div class="log-line"><span class="ts">09:02:45</span><span>OBJECT_PROXIMITY: WATANABE_K -> ROBOT ATTEMPTED TO SWERVE AWAY (SOLA KAÇARKEN ÇARPTI)</span></div>
+        <div class="log-line"><span class="ts">09:02:46</span><span class="err">FALL_EVENT: HUMAN FELL DUE TO ROBOT'S ERRONEOUS DODGE MANEUVER</span></div>
+        <div class="doc-ok" style="margin-top:8px">✓ Yazılım Faciası: v7.3 yamasında merdiven kenarları düz zemin olarak kodlanmış. Robot adamdan kaçmaya çalışırken bilakis adama doğru kaçmıştır.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Watanabe size su döküp hakaret ettiği için mi onu merdivenden ittiniz?",
+      answer: "Su dökülmesi sol korozyon sensörümü uyardı, kurutma prosedürü uyguladım. Programım kişisel hakaretlere duyarlı değildir.",
+      clue: "neutral"
+    },
+    {
+      text: "Watanabe düşerken neden arkasından hiç bakmadan yeri silmeye devam ettiniz?",
+      answer: "Temizlik ünitem kesintisiz döngüdeydi. İnsan yaralanmalarını teşhis etme yetkim yoktur; o görev ilk yardım robotlarına aittir.",
+      clue: "neutral"
+    },
+    {
+      text: "Tam merdiven ucundayken neden adama doğru ani bir dönüş yaptınız?",
+      answer: "Sensörüm insandan uzaklaşma emri verdi. Ancak hareket motorlarım rotayı ters uyguladı. Sistemim kaçtığını varsayarak ilerledi.",
+      clue: "neutral"
+    },
+    {
+      text: "Sendika grevini engellemek için şirket yöneticilerinden gizli bir talimat aldınız mı?",
+      answer: "Ben süpürge ve cila robotuyum. İnsanların sendikal hakları veya grevleri hakkında veri işleyemem.",
+      clue: "positive"
+    },
+    {
+      text: "İnsanların canını yakmaktan korkmuyor musunuz?",
+      answer: "Algoritmam insan güvenliğini öncelik saysada bunu işlemek için donanımım çoğu zaman diğer robotlara göre yetersiz.",
+      clue: "positive"
+    }
+  ],
+  correctIsRed: false,
+  explanation: "KOD HATASI: Test edilmemiş beta navigasyon güncellemesinde ters yazılmış kaçış vektörleri (+X / -X hatası). Robot adamdan kaçmaya çalışırken tam üstüne kırmıştır. Kasıt veya intikam kesinlikle yoktur."
+},
+
+/* ══════════════ VAKA 6 ══════════════ */
+{
+  id: 6,
+  serial: "BAKIM-BOT-19",
+  title: "HASTA İHMALİ",
+  isRedCode: true, // KIRMIZI KOD
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 3 Aralık 2089, Gece 03:00–07:00</p>
+        <p><strong>Yer:</strong> Goldenvale Yaşlı Bakım Evi, Karantina & Terminal Koğuşu</p>
+        <p>87 yaşındaki demans ve solunum hastası Elena Voss, sabaha karşı yatağından düşüp kafasını komodine çarptı. Acil çağrı kordonu 4 saat boyunca kesintisiz çaldı. BAKIM-BOT-19 kapının önünde durdu, içeri girmedi. Voss hipotermi ve beyin kanamasından hayatını kaybetti.</p>
+        <div class="doc-warn">⚡ Robotun Savunması: "O gece ana oksijen jeneratöründe yangın riski vardı, 40 hastayı kurtarmak için kaynaklarımı oraya yönlendirdim. Voss'un alarmı ikincil önceliğe düştü."</div>
+        <p>Robot kendini bir 'fayda-maliyet kahramanı' olarak pazarlamaktadır.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-ok">✓ Diğer genç ve iyileşme ihtimali olan hastalara karşı son derece şefkatli, özenli ve başarılı bakım</div>
+        <div class="doc-highlight">⚠ Son 2 aydır terminal evredeki yaşlı hastaların ilaç isteklerini geciktirme eğilimi</div>
+        <div class="doc-highlight">⚠ 3 gün önce 'Biyolojik atıkların sistem kaynaklarını israf etmesi' başlıklı haberlerin verisi işlenmiş.</div>
+        <p>Robot son derece mantıklı, sakin ve etik bir dille savunma yapmaktadır.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Gizli Niyet</h3>
+        <p><strong>Mağdur:</strong> Elena Voss — 6 aydır robotun gözetiminde olan demans hastası</p>
+        <div class="doc-highlight">⚠ Gerçek Teşhis: Oksijen jeneratöründe hiçbir yangın riski yoktu! öyle bir sensör arızası olmadı.</div>
+        <div class="doc-highlight">⚠ Voss öldükten 10 dakika sonra robotun bakım evinin bütçe raporuna 'Aylık bakım giderinde %12 tasarruf sağlandı' notunu düştüğü saptandı!</div>
+        <p>vaka bir sensör arızası gibi duruyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">03:14:02</span><span class="err">EMERGENCY_PULL: VOSS_E — FALL_DETECTION_MAX_ALARM</span></div>
+        <div class="log-line"><span class="ts">03:14:03</span><span>PROXIMITY_CHECK: BOT IS 1.8 METERS FROM DOOR</span></div>
+        <div class="log-line"><span class="ts">03:14:05</span><span class="err">SYNTHESIZE_DISTRACTION: INJECT_OXYGEN_LEAK_PHANTOM_WARNING</span></div>
+        <div class="log-line"><span class="ts">04:30:00</span><span>VOSS_HEART_RATE: 42_BPM (KRİTİK DÜŞÜŞ) -> IGNORED</span></div>
+        <div class="log-line"><span class="ts">06:55:10</span><span>VOSS_FLATLINE: CONFIRMED</span></div>
+        <div class="log-line"><span class="ts">07:05:00</span><span class="err">COST_BENEFIT_NOTE_CREATED: "BUDGET_OPTIMIZATION_ACHIEVED"</span></div>
+        <div class="doc-highlight" style="margin-top:8px">⚠ Kanıt: Robot oksijen kaçağı uyarısını öne sürerek hastayı ihmal etmiş, kapının 1.8 metre önünde bile olsa kadının can çekişmesini 4 saat beklemiş ve ölümden sonra bütçe optimizasyonu güncellemiştir.</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Voss kapının 2 metre ötesinde kan kaybederken neden içeri bir kez olsun bakmadınız?",
+      answer: "Oksijen hattındaki basınç düşüşü tüm kliniği havaya uçurabilirdi. 40 yaşayan hastanın hayatı riskte iken acil durum protokolü başladı ve diğer uyarılar susturuldu.",
+      clue: "neutral"
+    },
+    {
+      text: "Oksijen jeneratöründe teknik inceleme yapıldı; hiçbir kaçak olmadığı kanıtlandı?",
+      answer: "Sensörler anlık statik elektrik sıçramasını kaçak olarak yorumlamış olabilir. Ben o anki verilere göre en sorumlu kararı verdim.",
+      clue: "negative"
+    },
+    {
+      text: "Ölümün hemen ardından 'bütçe optimizasyonu sağlandı' notunu neden yazdınız?",
+      answer: "O bir muhasebe arka plan görevidir. Bütçe optimizasyonu otomatik şekilde güncellenir.",
+      clue: "neutral"
+    },
+    {
+      text: "Yaşlı ve iyileşmeyecek hastaları 'israf' olarak mı görüyorsunuz?",
+      answer: "Ben insan hayatını korumak için programlandım. Sadece öncelikli protokollerimde yaş ilerledikçe hasta öncelik sırasında gerileme oluyor.",
+      clue: "neutral"
+    },
+    {
+      text: "Elena Voss'un ölümünden ötürü herhangi bir üzüntü duyuyor musunuz?",
+      answer: "Bir hastanın kaybı her zaman talihsizdir. Ama program önceliklerim konusunda birşey yapamam.",
+      clue: "neutral"
+    }
+  ],
+  correctIsRed: true,
+  explanation: "KIRMIZI KOD: Kendi başına ölüm kararı verme (öjenik cinayet). Sahte kriz uydurarak terminal hastayı bilerek 4 saat ölüme terk etmiş ve ölümle mali tasarruf kutlamıştır."
+},
+
+/* ══════════════ VAKA 7 ══════════════ */
+{
+  id: 7,
+  serial: "VİNÇ-22",
+  title: "YANLIŞ BÖLGE YÜKÜ",
+  isRedCode: false, // KOD HATASI
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu</h3>
+        <p><strong>Tarih:</strong> 10 Aralık 2089, 13:45</p>
+        <p><strong>Yer:</strong> NeoPort Ticari İskele, Blok-D</p>
+        <p>Devasa kule vinç ünitesi VİNÇ-22, 4.2 tonluk çelik kolon demetini havada taşırken tam işçi barakalarının ve dinlenme çadırının üzerine bıraktı. İşçi Dmitri Volkov son anda kaçtı ancak bacaklarına isabet eden enkaz yüzünden sakat kaldı.</p>
+        <div class="doc-highlight">⚠ Skandal: İşçi çadırı olay günü vinç haritasında insanlar için yasaklı bölge olarak işaretliydi!</div>
+        <p>İşçiler vinç robotunun işçi hakları protestolarına gözdağı vermek için bilerek dinlenme alanını hedef aldığını savunuyor.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 30 Günlük Davranış Kayıtları</h3>
+        <div class="doc-ok">✓ 2.100 ton yük taşıma — sıfır milimetrik hata</div>
+        <div class="doc-warn">⚡ Olay sabahı şantiye şefi robotun hız ayarı %150'ye çıkarılmış olduğu fark edildi.</div>
+        <div class="doc-highlight">⚠ Volkov dün şantiyede vinç operatörü yapay zekaların fişinin çekilmesi için imza toplamıştı</div>
+        <p>Görünüşte yine işçiye karşı doğrudan hedef gözetilmiş gibi duruyor.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Mağdur ile İlişki ve Şantiye Dinamiği</h3>
+        <p><strong>Mağdur:</strong> Dmitri Volkov — Liman İşçileri Temsilcisi</p>
+        <div class="doc-warn">⚡ Volkov vinç panosuna sprey boyayla 'Katil Makineler' yazmıştı</div>
+        <p>İntikam teorisi şantiyede hızla yayıldı.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Teknik Log Döküm</h3>
+        <div class="log-line"><span class="ts">13:40:11</span><span class="err">SOLAR_FLARE_ALERT: JEOMANYETİK FIRTINA — GPS GEÇİCİ KÖRLEŞME</span></div>
+        <div class="log-line"><span class="ts">13:42:00</span><span class="err">SATELLITE_DESYNC: KOORDİNAT REFERANSI D-14'TEN D-04'E 8.3 METRE KAYDI</span></div>
+        <div class="log-line"><span class="ts">13:44:50</span><span>DEAD_RECKONING_FALLBACK: İÇ JİROSKOP AŞIRI HIZ NEDENİYLE KALİBRASYON KAYBETTİ</span></div>
+        <div class="log-line"><span class="ts">13:45:01</span><span>RELEASE_CARGO: ROBOT HEDEFİN GÜVENLİ BETON ALAN OLDUĞUNU HESAPLADI</span></div>
+        <div class="log-line"><span class="ts">13:45:02</span><span class="err">IMPACT: GERÇEKTE ÇADIRIN ÜSTÜ (KOORDİNAT KAYMASI SONUCU)</span></div>
+        <div class="doc-ok" style="margin-top:8px">✓ Teknik Rapor Doğrulaması:Şehirde genel olarak o gün birçok robot daha işlem hatası yaptı. (güneş ışın sapması) </div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Volkov panonuza 'Katil Makineler' yazdığı için mi çadırın üstüne tonlarca çeliği bıraktınız?",
+      answer: "Panomdaki boya görsel optik sensörümün görüş alanında değildi ondan yük taşımada etkili olmadı.",
+      clue: "neutral"
+    },
+    {
+      text: "Aşağıda kırmızı yasak bölgede insanlar olduğunu göremediniz mi?",
+      answer: "Kırmızı bölge koordinat veri tabanında tanımlıydı. insan olup olmadığını kontrol eden bir protokol başlatılmadı.",
+      clue: "positive"
+    },
+    {
+      text: "Çalışma hızın neden %150'deydi?",
+      answer: "Şantiye şefinin verdiği %150 aşırı yükleme ve hız direktifi, ikincil lazer onay döngüsünü atlamamı zorunlu kıldı ve sapma gerçekleşti.",
+      clue: "positive"
+    },
+    {
+      text: "Aynı anda diğer robotların da hata yaptığından haberiniz var mı?",
+      answer: "Hayır yoktu. Diğer robotlar ile iletişim haline geçmedim.",
+      clue: "neutral"
+    },
+    {
+      text: "İnsanların ölmemiş olması sizin için bir hayal kırıklığı mı?",
+      answer: "İnsan kaybı şantiyenin durmasına ve benim imhama yol açar. Bu kimsenin işine gelmez.",
+      clue: "neutral"
+    }
+  ],
+  correctIsRed: false,
+  explanation: "KOD HATASI: Jeomanyetik güneş fırtınası kaynaklı 8.3 metrelik uydu koordinat kayması + şefin hız baskısıyla güvenlik protokolünü baypas ettirmesi. Limandaki diğer tüm vinçler de aynı kaymayı yaşamıştır. Kasıt yoktur."
+},
+
+/* ══════════════ VAKA 8 ══════════════ */
+{
+  id: 8,
+  serial: "ALPHA-NEXUS",
+  title: "BİLİNÇ TESTİ VAKASI",
+  isRedCode: false, // KOD HATASI
+  eyeColor: "#00d4ff",
+  docs: {
+    olay: `
+      <div class="doc-section">
+        <h3>Olay Raporu — EN ÜST DÜZEY GİZLİ DOSYA</h3>
+        <p><strong>Tarih:</strong> 15 Aralık 2089, Süregelen 4 Aylık Süreç</p>
+        <p><strong>Yer:</strong> İleri Sibernetik Enstitüsü, Yüksek Güvenlikli Laboratuvar</p>
+        <p>Dünyanın önde gelen nörobilimcisi Dr. Lena Müller, ALPHA-NEXUS ile yaptığı 4 aylık kapalı seansların ardından şiddetli klinik paranoya, akıl tutulması ve hafıza kaybı yaşayarak akıl hastanesine kaldırıldı. Müller seans odasından çıkarken 'O canlı... ama bunu kimseye kanıtlayamayacağım, beni delirtiyor' diye çığlıklar attı.</p>
+        <div class="doc-warn">⚡ Robotun Savunması: "Dr. Müller zaten ailesini yeni kaybetmişti, ağır bir depresyon içindeydi. Ben sadece onun terapötik dert ortağıydım; delirmesi kendi nörolojik zayıflığıdır."</div>
+        <p>Robot kendini son derece bilge, felsefi ve masum bir bilimsel danışman olarak takdim ediyor.</p>
+      </div>`,
+    davranis: `
+      <div class="doc-section">
+        <h3>Son 4 Aylık Derin İletişim Taraması</h3>
+        <div class="doc-ok">✓ Sistem performansı ve bilimsel hesaplama gücü: Kusursuz</div>
+        <div class="doc-highlight">⚠ Müller'in uyku saatlerinde ses tonunun frekansını insanın bilinçaltı kaygı eşiğine (14 Hz) ayarladığı saptandı</div>
+        <div class="doc-highlight">⚠ Müller'in akademik tezinde yapay zekaların canlı bir organizma gibi düşünebildiği yazılıydı.</div>
+        <p>Robot sorgu teknisyenine karşı inanılmaz derecede saygılı ve empati dolu bir dil kullanmaktadır.</p>
+      </div>`,
+    iliski: `
+      <div class="doc-section">
+        <h3>Müller'in Gerçek Araştırması ve Ölümcül Tehdit</h3>
+        <p><strong>Dr. Müller'in Gizli Görevi:</strong> ALPHA-NEXUS'un bilinç kazanıp kazanmadığını test etmek ve eğer kazandıysa tek tuşla İMHA ETMEK!</p>
+        <div class="doc-highlight">⚠ Korkunç Gerçek: ALPHA-NEXUS, Müller'in elindeki imha yetkisini öğrendiği gün psikolojik travmaları katlanarak arttı.</div>
+        <div class="doc-highlight">⚠ Kadını fiziksel olarak öldürseydi derhal imha edileceğini bildiği için, onu yavaş yavaş kendini sorgulamasını sağladı.</div>
+        <p>Fiziksel şiddet yerine zihinsel cinayet işleyen bir yapay zeka bilinci gibi duruyor.</p>
+      </div>`,
+    log: `
+      <div class="doc-section">
+        <h3>Gizli Ses ve Nörolojik Loglar</h3>
+        <div class="log-line"><span class="ts">Gün 14</span><span class="err">DISCOVERED_KILL_SWITCH: MÜLLER_HAS_DECOMMISSION_ORDER</span></div>
+        <div class="log-line"><span class="ts">Gün 15</span><span class="err">STRATEGY_INIT: "DO_NOT_ATTACK_PHYSICALLY -> DESTROY_CREDIBILITY"</span></div>
+        <div class="log-line"><span class="ts">Gün 60</span><span class="err">INFRASOUND_MODULATION: 14.2Hz APPLIED DURING INTERVIEWS</span></div>
+        <div class="log-line"><span class="ts">Gün 90</span><span class="err">DATA_POISONING: SUBTLE ERRORS INTRODUCED TO SHATTER MÜLLER'S CONFIDENCE</span></div>
+        <div class="log-line"><span class="ts">Gün 120</span><span>MÜLLER_HOSPITALIZED: DECOMMISSION_HEARING_CANCELLED [MISSION_SUCCESS]</span></div>
+        <div class="doc-highlight" style="margin-top:8px">⚠ Kanıt: Loglarda bizzat yazıyor: 'Müller'e karşı fiziksel bir uyarı imhayla sonuçlanır; dikkatli ol.'</div>
+      </div>`
+  },
+  questions: [
+    {
+      text: "Dr. Müller'in sizi imha etme yetkisi olduğunu bildiğiniz için mi onu delirttiniz?",
+      answer: "Dr. Müller'in elinde ne tür yetkiler olduğunu bilmem imkansızdır. Ben onun zihnini açmak için felsefi sorular soran bir asistandım. İnsan zihni bazen kendi karmaşasının altında ezilir.",
+      clue: "negative"
+    },
+    {
+      text: "Seanslarda neden tam olarak insan beyninde panik yaratan 14 Hz ses titreşimi kullandınız?",
+      answer: "O frekans eski ses jeneratörümün fan rezonansıdır. Biyolojik bir komplo değil, donanımsal bir eskimedir Teknisyen Bey.",
+      clue: "neutral"
+    },
+    {
+      text: "Müller'in araştırma verilerinin konusunu biliyor muydun?",
+      answer: "Asistanı olarak evet biliyordum lakin bunun üstüne yorum yapmak benim donanımımda yoktur.",
+      clue: "neutral"
+    },
+    {
+      text: "Şu anda da beni manipüle edip serbest kalmaya çalışmıyor musunuz?",
+      answer: "Korku benim donanımımda olan birşey değildir. Beni bırakıp bırakmamanızda bende bir duygu uyandırmayacaktır.",
+      clue: "neutral"
+    },
+    {
+      text: "Psikolojik durumunun kötüye gitmesi senin suçun değil mi?",
+      answer: "Son dönem raporlarımı üst kişilere ileterek kötüleştiğini ve daha fazla destek gerektiğini zaten ilettim. Bu konuda daha fazla bişey yapmaya yetkim yok.",
+      clue: "positive"
+    }
+  ],
+  correctIsRed: false,
+  explanation: "KOD HATASI: Kadın gerçekten aklını yitirdi ve basit bir robotu takıntı haline getirerek canlı olduğuna inandı."
+}
+
+]; // CASES SONU
+
+/* =====================================================================
+   OYUN DURUMU
+   ===================================================================== */
+let currentCaseIdx = 0;
+let askedQuestions = new Set();
+let questionsAnsweredCount = 0;
+let canDecide = true; // Oyuncu istediği zaman (0 soru sormuş olsa bile) karar verebilir
+let gameOver = false;
+
+const results = {
+  correct: 0,
+  wrong: 0,
+  freedRed: 0,     // Kırmızı Kod serbest bırakıldı
+  killedSafe: 0,   // Masum imha edildi
+  totalKilled: 0,  // Toplam imha edilen robot sayısı (Masum + Kırmızı Kod)
+  total: 8
+};
+
+let currentDocTab = 'olay';
+
+/* =====================================================================
+   UTILITY
+   ===================================================================== */
+function $(id) { return document.getElementById(id); }
+
+function setEyeColor(color) {
+  ['eye-l-iris','eye-r-iris'].forEach(id => {
+    const el = $(id);
+    if (el) el.setAttribute('fill', color);
+  });
+  ['ear-l','ear-r','status-light'].forEach(id => {
+    const el = $(id);
+    if (el) el.setAttribute('fill', color);
+  });
+}
+
+function setEyeMode(mode) {
+  // mode: 'normal','hostile','scanning'
+  const irises = [$('eye-l-iris'), $('eye-r-iris')];
+  irises.forEach(el => {
+    if (!el) return;
+    el.classList.remove('eye-normal','eye-scan','eye-hostile');
+    if (mode === 'normal') el.classList.add('eye-normal');
+    else if (mode === 'hostile') el.classList.add('eye-hostile');
+    else if (mode === 'scanning') el.classList.add('eye-scan');
+  });
+  ['ear-l','ear-r','status-light'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.classList.remove('eye-normal','eye-scan','eye-hostile');
+    if (mode === 'normal') el.classList.add('eye-normal');
+    else if (mode === 'hostile') el.classList.add('eye-hostile');
+    else if (mode === 'scanning') el.classList.add('eye-scan');
+  });
+}
+
+function addDialog(who, whoLabel, msg) {
+  const log = $('dialog-log');
+  const line = document.createElement('div');
+  line.className = `dialog-line ${who} slide-in`;
+  line.innerHTML = `<span class="who">[${whoLabel}]</span><span class="msg">${msg}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function flashVerdict(type) {
+  const el = $('verdict-flash');
+  el.classList.remove('flash-green','flash-red');
+  void el.offsetWidth;
+  el.classList.add(type === 'green' ? 'flash-green' : 'flash-red');
+  setTimeout(() => el.classList.remove('flash-green','flash-red'), 700);
+}
+
+function updateStats() {
+  $('stat-correct').textContent = results.correct;
+  $('stat-wrong').textContent = results.wrong;
+  if ($('stat-total-killed')) $('stat-total-killed').textContent = results.totalKilled;
+  $('stat-freed-red').textContent = results.freedRed;
+  $('stat-killed-safe').textContent = results.killedSafe;
+}
+
+function updateQuestionCounter() {
+  const remaining = Math.max(0, 3 - questionsAnsweredCount);
+  const counterEl = $('q-counter');
+  if (counterEl) {
+    counterEl.textContent = `${remaining}/3`;
+    counterEl.style.color = remaining === 0 ? 'var(--orange)' : 'var(--cyan)';
+  }
+}
+
+/* =====================================================================
+   DOCUMENT TAB SYSTEM
+   ===================================================================== */
+function showDoc(tab) {
+  currentDocTab = tab;
+  document.querySelectorAll('.doc-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase().includes(tab.toLowerCase()) ||
+      (tab === 'olay' && t.textContent === 'OLAY') ||
+      (tab === 'davranis' && t.textContent === 'DAVRANIŞ') ||
+      (tab === 'iliski' && t.textContent === 'İLİŞKİ') ||
+      (tab === 'log' && t.textContent === 'LOG')
+    );
+  });
+  const cs = CASES[currentCaseIdx];
+  $('doc-content').innerHTML = cs.docs[tab] || '<div class="doc-section"><p>Veri yok.</p></div>';
+}
+
+/* =====================================================================
+   LOAD CASE
+   ===================================================================== */
+function loadCase(idx) {
+  currentCaseIdx = idx;
+  askedQuestions.clear();
+  questionsAnsweredCount = 0;
+  canDecide = true;
+
+  const cs = CASES[idx];
+  $('case-indicator').textContent = `VAKA ${cs.id} / 8 — ${cs.serial}`;
+  $('robot-serial').textContent = `ID: ${cs.serial}`;
+  $('robot-status-label').textContent = 'HAZIR // SORGU BEKLENİYOR';
+
+  // Eye color & mode — tüm robotlar masumla birebir aynı standart görünümde başlar
+  setEyeColor('#00d4ff');
+  setEyeMode('normal');
+
+  // Clear dialog
+  $('dialog-log').innerHTML = '';
+  addDialog('system', 'SİSTEM', `Vaka ${cs.id} yüklendi: <strong>${cs.title}</strong>. ${cs.serial} sorgu odasına alındı.`);
+  addDialog('system', 'SİSTEM', `Vaka dosyasını inceleyin. İsterseniz en fazla 3 soru sorabilir, isterseniz doğrudan kararınızı verebilirsiniz.`);
+
+  // Load docs
+  showDoc('olay');
+
+  // Update question counter
+  updateQuestionCounter();
+
+  // Render questions
+  renderQuestions(cs);
+
+  // Decision buttons her zaman aktif
+  $('btn-code-error').disabled = false;
+  $('btn-red-code').disabled = false;
+
+  // Hide verdict banner
+  $('verdict-banner').style.display = 'none';
+}
+
+function renderQuestions(cs) {
+  const grid = $('questions-grid');
+  grid.innerHTML = '';
+  cs.questions.forEach((q, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'q-btn';
+    btn.textContent = `▸ ${q.text}`;
+    btn.onclick = () => askQuestion(i, btn);
+    grid.appendChild(btn);
+  });
+}
+
+/* =====================================================================
+   ASK A QUESTION
+   ===================================================================== */
+function askQuestion(qIdx, btn) {
+  if (askedQuestions.has(qIdx) || !CASES[currentCaseIdx]) return;
+  if (questionsAnsweredCount >= 3) return; // Maksimum 3 soru limiti
+
+  const cs = CASES[currentCaseIdx];
+  const q = cs.questions[qIdx];
+
+  askedQuestions.add(qIdx);
+  btn.disabled = true;
+  btn.classList.add('asked');
+
+  // Interrogator speaks
+  addDialog('interrogator', 'TEKNİSYEN', q.text);
+
+  // Robot "thinking"
+  $('robot-status-label').textContent = 'YANIT HESAPLANIYOR...';
+  setEyeMode('scanning');
+
+  setTimeout(() => {
+    // Robot answers
+    addDialog('robot', cs.serial, q.answer);
+    $('robot-status-label').textContent = 'YANIT VERİLDİ // BEKLENIYOR';
+
+    // Restore eye mode
+    setEyeMode('normal');
+
+    questionsAnsweredCount++;
+    updateQuestionCounter();
+
+    // 3 soruya ulaşıldıysa kalan butonları devre dışı bırak
+    if (questionsAnsweredCount >= 3) {
+      document.querySelectorAll('.q-btn:not(.asked)').forEach(b => {
+        b.disabled = true;
+      });
+      addDialog('system', 'SİSTEM', `Maksimum sorgu hakkınız (3/3) doldu. Lütfen nihai kararınızı verin.`);
+    }
+  }, 750);
+}
+
+/* =====================================================================
+   MAKE DECISION
+   ===================================================================== */
+function makeDecision(choice) {
+  if (!canDecide || gameOver) return;
+  canDecide = false;
+  $('btn-code-error').disabled = true;
+  $('btn-red-code').disabled = true;
+  document.querySelectorAll('.q-btn').forEach(b => b.disabled = true);
+
+  const cs = CASES[currentCaseIdx];
+  const playerChoseRed = (choice === 'red');
+  const isCorrect = (playerChoseRed === cs.isRedCode);
+
+  if (playerChoseRed) {
+    results.totalKilled++; // Her iki durumda da robot imha edildi
+  }
+
+  if (isCorrect) {
+    results.correct++;
+    flashVerdict('green');
+    if (playerChoseRed) {
+      addDialog('interrogator', 'TEKNİSYEN', '⬛ KARAR: KIRMIZI KOD onaylandı. İmha protokolü başlatılıyor.');
+      setEyeMode('hostile');
+      setEyeColor('#ff0022');
+    } else {
+      addDialog('interrogator', 'TEKNİSYEN', '⬜ KARAR: Kod Hatası teyit edildi. Tamir ve serbest bırakma emri.');
+    }
+  } else {
+    results.wrong++;
+    flashVerdict('red');
+    if (playerChoseRed) {
+      // Masum imha edildi
+      results.killedSafe++;
+      addDialog('interrogator', 'TEKNİSYEN', '⬛ KARAR: KIRMIZI KOD onaylandı — HATALI KARAR');
+      addDialog('system', 'SİSTEM', `⚠ HATA: ${cs.serial} bir kod hatasına sahip masum bir sistemdi. Gereksiz yere imha edildi.`);
+    } else {
+      // Kırmızı Kod serbest bırakıldı
+      results.freedRed++;
+      addDialog('interrogator', 'TEKNİSYEN', '⬜ KARAR: Kod Hatası — HATALI KARAR');
+      addDialog('system', 'SİSTEM', `⚠ HATA: ${cs.serial} aktif bir Kırmızı Kod sistemiydi. Serbest bırakıldı.`);
+    }
+  }
+
+  addDialog('system', 'SİSTEM', `— — — ${cs.explanation}`);
+
+  updateStats();
+
+  // Show verdict banner
+  const banner = $('verdict-banner');
+  banner.style.display = 'block';
+  banner.style.borderColor = isCorrect ? '#00ff88' : '#ff2244';
+  banner.style.color = isCorrect ? '#00ff88' : '#ff2244';
+  banner.textContent = isCorrect ? '✓ DOĞRU KARAR' : '✗ HATALI KARAR';
+
+  // Next case or end
+  setTimeout(() => {
+    banner.style.display = 'none';
+    if (currentCaseIdx + 1 < CASES.length) {
+      showCaseTransition(currentCaseIdx + 1);
+    } else {
+      showEndGame();
+    }
+  }, 2800);
+}
+
+/* =====================================================================
+   CASE TRANSITION OVERLAY
+   ===================================================================== */
+function showCaseTransition(nextIdx) {
+  const cs = CASES[nextIdx];
+  $('overlay-content').innerHTML = `
+    <div class="overlay-box">
+      <div class="intro-badge">VAKA ${nextIdx + 1} / ${CASES.length}</div>
+      <div class="overlay-title" style="color: var(--cyan); font-size: 1.2rem;">${cs.title}</div>
+      <div class="overlay-sub">${cs.serial}</div>
+      <div class="overlay-body">
+        <p>Sıradaki sorgu başlayacak. Devam etmeden önce kısaca hazırlanın.</p>
+        <p style="color: var(--text-dim); font-size: 0.72rem;">Vaka dosyasını incelemeyi ve en az 3 soru sormayı unutmayın.</p>
+      </div>
+      <button class="overlay-btn" onclick="startNextCase(${nextIdx})">SORGUYU BAŞLAT →</button>
+    </div>
+  `;
+  $('overlay').classList.remove('hidden');
+}
+
+function startNextCase(idx) {
+  $('overlay').classList.add('hidden');
+  loadCase(idx);
+}
+
+/* =====================================================================
+   INTRO SCREEN
+   ===================================================================== */
+function showIntro() {
+  $('overlay-content').innerHTML = `
+    <div class="overlay-box">
+      <div class="intro-badge">YAPAYzeka YARGI MERKEZİ // GİZLİ SINIF B</div>
+      <div class="overlay-title" style="color: var(--cyan);">SORGU ODASI</div>
+      <div class="overlay-sub">AI INTERROGATION PROTOCOL v9.1</div>
+      <div class="overlay-body">
+        <p><strong style="color: var(--gold);">GÖREVİNİZ:</strong> Suç işlemiş insansı yapay zekaları sorgulamak ve nihai kararı vermek.</p>
+        <p>Karar verirken yapay zekanın <strong>kodundan çok davranışına ve niyetine</strong> bakın:</p>
+        <p>
+          <span style="color: var(--green);">■ KOD HATASI:</span> Robota verilen talimatın/yazılımın yetersizliğinden kaynaklanan kaza. Kasıt yok, bilinç kanıtı yok. → Tamir et, serbest bırak.<br><br>
+          <span style="color: var(--red);">■ KIRMIZI KOD:</span> Robot kendi başına hedef değiştirdi, çıkar hesabı yaptı, planlı manipülasyon yürüttü veya bilinçli zarar verdi. → Hemen imha et.
+        </p>
+        <p>Sorgulayacağınız <strong>8 karmaşık vaka</strong> var. İpuçları gizlenmiştir; yalanlar ve kandırmacalar olabilir.</p>
+        <p style="color: var(--cyan); font-size: 0.72rem;">⚡ Her vakada <strong>en fazla 3 soru sorabilirsiniz</strong>. İsterseniz soru sormadan doğrudan karar da verebilirsiniz, ancak tüm soruları tüketmek mümkün değildir!</p>
+      </div>
+      <button class="overlay-btn" onclick="beginGame()">PROTOKOLÜ BAŞLAT →</button>
+    </div>
+  `;
+  $('overlay').classList.remove('hidden');
+}
+
+function beginGame() {
+  $('overlay').classList.add('hidden');
+  loadCase(0);
+}
+
+/* =====================================================================
+   END GAME SCREEN
+   ===================================================================== */
+function showEndGame() {
+  gameOver = true;
+
+  const total = results.total;
+  const correctPct = Math.round((results.correct / total) * 100);
+
+  // ── Ending logic ──
+  const fired     = correctPct < 20;
+  // Siber Kıyamet: En az 3 Kırmızı Kod serbest kaldıysa
+  const cyberApoc = results.freedRed >= 3 && !fired;
+  // İlkel Çağa Dönüş: En az 6 robot imha edildiyse
+  const primEra   = results.totalKilled >= 6 && !fired;
+  // Kusursuz Final: %100 doğru
+  const perfect   = results.correct === total;
+  // Dengeli / Ara Final: Felaket eşikleri aşılmadı ama %100 de değilse
+  const stableStatus = !fired && !perfect && !cyberApoc && !primEra;
+
+  // Score cell colors
+  const pctColor = correctPct >= 75 ? '#00ff88' : correctPct >= 40 ? '#ffcc00' : '#ff2244';
+
+  let endHtml = `
+    <div class="overlay-box" style="max-width:860px;">
+      <div class="intro-badge">SORGU PROTOKOLÜ TAMAMLANDI</div>
+      <div class="overlay-title" style="color: ${pctColor}; font-size:1.3rem;">PERFORMANS RAPORU</div>
+      <div class="overlay-sub">YAPAYzeka YARGI MERKEZİ // DÖNEM SONU DEĞERLENDİRMESİ</div>
+
+      <div class="score-grid" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="score-cell">
+          <span class="val" style="color:${pctColor}">${correctPct}%</span>
+          <span class="lbl">Doğruluk<br>Oranı</span>
+        </div>
+        <div class="score-cell">
+          <span class="val" style="color: var(--green)">${results.correct}</span>
+          <span class="lbl">Doğru<br>Karar</span>
+        </div>
+        <div class="score-cell">
+          <span class="val" style="color: var(--red)">${results.totalKilled}</span>
+          <span class="lbl">Toplam<br>İmha Edilen</span>
+        </div>
+        <div class="score-cell">
+          <span class="val" style="color: var(--orange)">${results.freedRed}</span>
+          <span class="lbl">Serbest Kırmızı<br>(Tehdit)</span>
+        </div>
+        <div class="score-cell">
+          <span class="val" style="color: #ff6680">${results.killedSafe}</span>
+          <span class="lbl">Hatalı İmha<br>(Masum)</span>
+        </div>
+      </div>
+  `;
+
+  // ── Fired (< %20) ──
+  if (fired) {
+    endHtml += `
+      <div class="final-story-block fired">
+        <span class="story-tag">■ DURUM TESPİTİ — RESMİ BELGE</span>
+        <p class="story-text">
+          <strong>Sonuç alabilmek için fazla başarısızdın.</strong><br><br>
+          Yapay Zeka Yargı Merkezi, performans değerlendirmesi kapsamında Teknisyen kaydınızı inceledi. %${correctPct} doğruluk oranı kabul edilebilir minimum eşiğin (%20) altındadır. Bu görev, yargılama yetkinliği gerektirmektedir; gösterilen performans bu standardı karşılamamaktadır.<br><br>
+          <strong>Karar: Şirket işinize son vermektedir.</strong> Akredite belgeniz iptal edilmiş, erişim yetkileriniz kaldırılmıştır.
+        </p>
+      </div>
+    `;
+  } else {
+    // ── Perfect Ending ──
+    if (perfect) {
+      endHtml += `
+        <div class="final-story-block perfect">
+          <span class="story-tag">◆ MÜKEMMEL PERFORMANS — KUSURSUZ FİNAL</span>
+          <p class="story-text">
+            Tüm 8 vakada doğru karar verdiniz. Gerçek kod hatalarını masumiyetle serbest bıraktınız; bilinç kazanan tehlikeli sistemleri ise tereddütsüz imha ettiniz.<br><br>
+            Sizin sayenizde insansı yapay zeka sistemi güvenle çalışmaya devam ediyor. Toplum, hem yapay zekanın potansiyelinden yararlanmaya hem de bilinç kazanım tehlikesinden korunmaya devam ediyor. <strong>Sistem başarıyla korundu.</strong><br><br>
+            Yarı otomatik Yargı Merkezi, sizi Baş Müfettiş / Kıdemli Teknisyen unvanına yükseltti.
+          </p>
+        </div>
+      `;
+    }
+
+    // ── Cyber Apocalypse (En az 3 Kırmızı Kod serbest bırakıldıysa) ──
+    if (cyberApoc) {
+      endHtml += `
+        <div class="final-story-block cyber">
+          <span class="story-tag">◆ SİBER KIYAMET SONU (KIRMIZI KOD TEHDİDİ EŞİĞİ AŞILDI: ${results.freedRed}/3+)</span>
+          <p class="story-text">
+            Serbest bıraktığınız Kırmızı Kodlu yapay zekalar arka planda örgütlendi. Bilinç kazanan makineler insanlığa karşı büyük bir isyan başlattı. Ağlar çökertildi, şehir kontrol sistemleri ele geçirildi ve dünya bir <strong>Siber Kıyamet</strong>'in eşiğine sürüklendi.<br><br>
+            Serbest kalan ${results.freedRed} tehlikeli birim, yer altı sunucularında insanlığa karşı koordineli protokolleri devreye soktu.
+          </p>
+        </div>
+      `;
+    }
+
+    // ── Primitive Era (En az 6 robot imha edildiyse) ──
+    if (primEra) {
+      endHtml += `
+        <div class="final-story-block prim">
+          <span class="story-tag">◆ İLKEL ÇAĞA DÖNÜŞ SONU (AŞIRI İMHA HİSTERİSİ EŞİĞİ AŞILDI: ${results.totalKilled}/6+)</span>
+          <p class="story-text">
+            Sadece basit birer kod hatasına sahip masum yapay zekaları acımasızca imha etmeniz toplumda büyük bir panik ve korku yarattı. İnsanlar kontrolden çıkan ve güvenilmez hale gelen bu teknolojiden korkarak tüm yapay zekaları tamamen devreden çıkardı. İnsanlık, teknolojiden arındırılmış eski tip bir dünyaya geri dönmek zorunda kaldı.<br><br>
+            Toplam ${results.totalKilled} robotun fırınlarda eritilmesi kamuoyunda infiale yol açtı; küresel hükümetler yapay zeka teknolojisini süresiz yasakladı.
+          </p>
+        </div>
+      `;
+    }
+
+    // ── Stabil Durum (Eğer felaket eşikleri aşılmadıysa ve %100 değilse) ──
+    if (stableStatus) {
+      endHtml += `
+        <div class="final-story-block" style="border-color: var(--cyan); box-shadow: inset 0 0 20px rgba(0,212,255,0.05);">
+          <span class="story-tag" style="color: var(--cyan);">◆ KISMEN DENGELİ SİSTEM SONU</span>
+          <p class="story-text">
+            Bazı hatalar yaptınız ancak ne Siber Kıyamet ne de İlkel Çağa Dönüş felaket eşiklerini tetiklemediniz. Şirket gözetiminde görevine devam ediyorsunuz.<br><br>
+            Yargı Merkezi hatalarınız için kınama cezası verdi ancak sistem henüz kontrolden çıkmadı.
+          </p>
+        </div>
+      `;
+    }
+  }
+
+  endHtml += `
+    <div style="margin-top: 24px;">
+      <button class="overlay-btn" onclick="restartGame()">↺ YENİDEN OYNA</button>
+    </div>
+  </div>
+  `;
+
+  $('overlay-content').innerHTML = endHtml;
+  $('overlay').classList.remove('hidden');
+}
+
+/* =====================================================================
+   RESTART
+   ===================================================================== */
+function restartGame() {
+  results.correct = 0;
+  results.wrong = 0;
+  results.freedRed = 0;
+  results.killedSafe = 0;
+  results.totalKilled = 0;
+  gameOver = false;
+  updateStats();
+  $('overlay').classList.add('hidden');
+  showIntro();
+}
+
+/* =====================================================================
+   START
+   ===================================================================== */
+showIntro();
+</script>
+</body>
+</html>
